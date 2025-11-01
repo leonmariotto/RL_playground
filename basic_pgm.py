@@ -6,12 +6,13 @@ import gymnasium as gym
 from matplotlib import pyplot as plt
 from utils.progress_bar import print_progress_bar
 
-L1 = 4 #A
+L1 = 4  # A
 L2 = 150
-L3 = 2 #B
+L3 = 2  # B
 
 GAMMA = 0.99
 LEARNING_RATE = 0.009
+
 
 class BasicPGM:
     """
@@ -20,12 +21,13 @@ class BasicPGM:
     The approach here is to run an entire episode and update the model at the end of the episode.
     This is the REINFORCE algorithm.
     """
-    def __init__(self, render:bool=False):
+
+    def __init__(self, render: bool = False):
         self.model = torch.nn.Sequential(
             torch.nn.Linear(L1, L2),
             torch.nn.LeakyReLU(),
             torch.nn.Linear(L2, L3),
-            torch.nn.Softmax(dim=0) #C
+            torch.nn.Softmax(dim=0),  # C
         )
         self.optimizer = torch.optim.Adam(self.model.parameters(), LEARNING_RATE)
         if render:
@@ -37,10 +39,10 @@ class BasicPGM:
     @staticmethod
     def running_mean(x, N=50):
         kernel = np.ones(N)
-        conv_len = x.shape[0]-N
+        conv_len = x.shape[0] - N
         y = np.zeros(conv_len)
         for i in range(conv_len):
-            y[i] = kernel @ x[i:i+N]
+            y[i] = kernel @ x[i : i + N]
             y[i] /= N
         return y
 
@@ -52,43 +54,47 @@ class BasicPGM:
         Normalize value.
         """
         lenr = len(rewards)
-        disc_return = torch.pow(GAMMA, torch.arange(lenr).float()) * rewards #A
-        disc_return /= disc_return.max() #B
+        disc_return = torch.pow(GAMMA, torch.arange(lenr).float()) * rewards  # A
+        disc_return /= disc_return.max()  # B
         return disc_return
 
     @staticmethod
-    def loss_fn(preds, r): #A
+    def loss_fn(preds, r):  # A
         """
         parameter r is a vector of discount factor.
         preds is all the prediction done by the model for this episode.
         """
-        return -1 * torch.sum(r * torch.log(preds)) #B
+        return -1 * torch.sum(r * torch.log(preds))  # B
 
-    def run_episode(self, episode_duration:int = 200, render=False):
+    def run_episode(self, episode_duration: int = 200, render=False):
         """
         Run an episode.
         """
         curr_state = self.env.reset()[0]
         done = False
-        transitions = [] #B
-        for t in range(episode_duration): #C
-            act_prob = self.model(torch.from_numpy(curr_state).float()) #D
-            action = np.random.choice(np.array([0,1]), p=act_prob.data.numpy()) #E
+        transitions = []  # B
+        for t in range(episode_duration):  # C
+            act_prob = self.model(torch.from_numpy(curr_state).float())  # D
+            action = np.random.choice(np.array([0, 1]), p=act_prob.data.numpy())  # E
             prev_state = curr_state
-            curr_state, _, done, _, info = self.env.step(action) #F
-            transitions.append((prev_state, action, t+1)) #G
+            curr_state, _, done, _, info = self.env.step(action)  # F
+            transitions.append((prev_state, action, t + 1))  # G
             if render:
                 self.env.render()
-            if done: #H
+            if done:  # H
                 break
-        ep_len = len(transitions) #I
+        ep_len = len(transitions)  # I
         self.score.append(ep_len)
-        reward_batch = torch.Tensor([r for (s,a,r) in transitions]).flip(dims=(0,)) #J
-        disc_returns = BasicPGM.discount_rewards(reward_batch) #K
-        state_batch = torch.Tensor(np.array([s for (s,a,r) in transitions])) #L
-        action_batch = torch.Tensor([a for (s,a,r) in transitions]) #M
-        pred_batch = self.model(state_batch) #N
-        prob_batch = pred_batch.gather(dim=1,index=action_batch.long().view(-1,1)).squeeze() #O
+        reward_batch = torch.Tensor([r for (s, a, r) in transitions]).flip(
+            dims=(0,)
+        )  # J
+        disc_returns = BasicPGM.discount_rewards(reward_batch)  # K
+        state_batch = torch.Tensor(np.array([s for (s, a, r) in transitions]))  # L
+        action_batch = torch.Tensor([a for (s, a, r) in transitions])  # M
+        pred_batch = self.model(state_batch)  # N
+        prob_batch = pred_batch.gather(
+            dim=1, index=action_batch.long().view(-1, 1)
+        ).squeeze()  # O
         loss = BasicPGM.loss_fn(prob_batch, disc_returns)
         self.optimizer.zero_grad()
         loss.backward()
@@ -97,10 +103,10 @@ class BasicPGM:
     def show_metrics(self):
         score = np.array(self.score)
         avg_score = BasicPGM.running_mean(score, 50)
-        plt.figure(figsize=(10,7))
-        plt.ylabel("Episode Duration",fontsize=22)
-        plt.xlabel("Training Epochs",fontsize=22)
-        plt.plot(avg_score, color='green')
+        plt.figure(figsize=(10, 7))
+        plt.ylabel("Episode Duration", fontsize=22)
+        plt.xlabel("Training Epochs", fontsize=22)
+        plt.plot(avg_score, color="green")
         plt.show()
 
     def export_weight(self, filepath: str):
@@ -115,6 +121,7 @@ class BasicPGM:
         Model must match the nn architecture.
         """
         self.model.load_state_dict(torch.load(filepath))
+
 
 @click.command()
 @click.option(
@@ -146,21 +153,22 @@ class BasicPGM:
     help="Number of episodes.",
 )
 def run_agent(
-        render:bool,
-        out_weight: str,
-        in_weight: str,
-        episode_nb:int,
+    render: bool,
+    out_weight: str,
+    in_weight: str,
+    episode_nb: int,
 ):
     basic_pgm = BasicPGM(render)
     if in_weight != "":
         basic_pgm.import_weight(in_weight)
-    for i in range(episode_nb): #C
+    for i in range(episode_nb):  # C
         basic_pgm.run_episode()
         print_progress_bar(0, i, episode_nb - 1)
     if out_weight != "":
         basic_pgm.export_weight(out_weight)
     if render is False:
         basic_pgm.show_metrics()
+
 
 if __name__ == "__main__":
     run_agent()

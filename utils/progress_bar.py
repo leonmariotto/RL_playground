@@ -1,5 +1,6 @@
 import sys
 
+
 def print_progress_bar(start, current, end, length=40):
     """
     Print a simple progress bar in the terminal.
@@ -15,7 +16,7 @@ def print_progress_bar(start, current, end, length=40):
     progress = max(0, min(1, progress))
 
     filled = int(length * progress)
-    bar = '█' * filled + '-' * (length - filled)
+    bar = "█" * filled + "-" * (length - filled)
     percent = int(progress * 100)
 
     # '\r' returns cursor to start of line so we overwrite it
