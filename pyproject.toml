@@ -10,6 +10,7 @@ dependencies = [
     "filelock",
     "fonttools",
     "fsspec",
+	"gymnasium",
     "Jinja2",
     "kiwisolver",
     "MarkupSafe",
