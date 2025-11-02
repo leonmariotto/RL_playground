@@ -54,6 +54,7 @@ class ActorCritic(torch.nn.Module):
 class DA2C:
     """
     Distributed advantage actor-critic (DA2C)
+    Actor critic model combine a Q-learner and a policy learner.
     """
 
     def __init__(self):
@@ -71,14 +72,14 @@ class DA2C:
         """
         self.optimizer.zero_grad()
         state, info = self.env.reset()
-        state = torch.from_numpy(state).float()  # A
-        values, logprobs, rewards = [], [], []  # B
+        state = torch.from_numpy(state).float()
+        values, logprobs, rewards = [], [], []
         done = False
         j = 0
         while not done:  # C
             j += 1
-            policy, value = self.model(state)  # D
-            values.append(value)
+            policy, value = self.model(state)
+            values.append(value)  # log the critic network value
             logits = policy.view(-1)  # reshapes the tensor policy into a flat 1D vector
             action_dist = torch.distributions.Categorical(
                 logits=logits
@@ -95,31 +96,34 @@ class DA2C:
                 self.env.reset()
             else:
                 reward = 1.0
-            rewards.append(reward)
+            rewards.append(reward)  # log rewards
             if j > EPISODE_TIMEOUT:
                 done = True
                 self.env.reset()
+        # Output critic model values, probability of taken action, and rewards.
         return values, logprobs, rewards
 
     def update_params(self, values, logprobs, rewards, clc=0.1, gamma=0.95):
         """
         update parameters with episodes values.
+        compute an overall loss with actor_loss and critic_loss.
         """
-        rewards = torch.Tensor(rewards).flip(dims=(0,)).view(-1)  # A
+        rewards = torch.Tensor(rewards).flip(dims=(0,)).view(-1)
         logprobs = torch.stack(logprobs).flip(dims=(0,)).view(-1)
         values = torch.stack(values).flip(dims=(0,)).view(-1)
         returns = []
         ret_ = torch.Tensor([0])
-        for r in range(rewards.shape[0]):  # B
+        for r in range(rewards.shape[0]):
             ret_ = rewards[r] + gamma * ret_
             returns.append(ret_)
         returns = torch.stack(returns).view(-1)
         returns = torch.nn.functional.normalize(returns, dim=0)
-        actor_loss = -1 * logprobs * (returns - values.detach())  # C
-        critic_loss = torch.pow(values - returns, 2)  # D
-        loss = actor_loss.sum() + clc * critic_loss.sum()  # E
+        actor_loss = -1 * logprobs * (returns - values.detach())
+        critic_loss = torch.pow(values - returns, 2)
+        loss = actor_loss.sum() + clc * critic_loss.sum()
         loss.backward()
         self.optimizer.step()
+        # Return list of actor loss, list of critic loss and length of episode.
         return actor_loss, critic_loss, len(rewards)
 
     def export_weight(self, filepath: str):
@@ -138,7 +142,6 @@ class DA2C:
 
 def worker(i: int, da2c: DA2C, counter, epoch_nb: int, queue):
     """ """
-    print(f"Worker[{i}]")
     metrics = {
         "actor_loss": [],
         "critic_loss": [],
